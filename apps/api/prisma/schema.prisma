@@ -23,4 +23,61 @@ model User {
   role         Role     @default(CLIENT)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  ticketsAuthored Ticket[]  @relation("TicketAuthor")
+  ticketsAssigned Ticket[]  @relation("TicketAssignee")
+  messages        Message[]
+}
+
+// OPEN: new, nobody on it yet. IN_PROGRESS: an agent works on it.
+// WAITING_CUSTOMER: an agent answered, the ball is in the client's court.
+// RESOLVED: the agent considers it solved (the client can still reopen by replying).
+// CLOSED: final, no more replies or changes.
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_CUSTOMER
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model Ticket {
+  id         String         @id @default(uuid())
+  subject    String
+  status     TicketStatus   @default(OPEN)
+  priority   TicketPriority @default(MEDIUM)
+  category   String? // filled by the AI classifier in a later step
+  authorId   String
+  author     User           @relation("TicketAuthor", fields: [authorId], references: [id])
+  assigneeId String?
+  assignee   User?          @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  messages   Message[]
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  // Indexes match the queries the app runs: a client's tickets, the agent queue
+  // filtered by status or assignee, sorted by last activity.
+  @@index([authorId])
+  @@index([assigneeId])
+  @@index([status, updatedAt])
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  body      String
+  internal  Boolean  @default(false) // internal note between agents, never shown to the client
+  createdAt DateTime @default(now())
+
+  @@index([ticketId, createdAt])
 }
