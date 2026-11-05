@@ -21,7 +21,8 @@
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "start:worker": "node dist/worker.js",
-    "dev:worker": "nest start --watch --entryFile worker"
+    "dev:worker": "nest start --watch --entryFile worker",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.5.0",
@@ -80,6 +81,6 @@
     "argon2@0.45.2": true
   },
   "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx src/seed.ts"
   }
 }

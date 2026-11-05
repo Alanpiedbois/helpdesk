@@ -98,7 +98,7 @@ describe('Real-time + stats (e2e)', () => {
     const agentSocket = connect(agent.cookie);
     await Promise.all(
       [authorSocket, otherSocket, agentSocket].map(
-        (s) => new Promise((resolve) => s.on('connect', resolve)),
+        (s) => new Promise<void>((resolve) => s.on('connect', () => resolve())),
       ),
     );
 

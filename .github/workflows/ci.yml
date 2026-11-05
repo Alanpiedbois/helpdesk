@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    # Real Postgres, Redis and RabbitMQ for the e2e tests, like docker-compose locally.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: helpdesk
+          POSTGRES_PASSWORD: helpdesk
+          POSTGRES_DB: helpdesk
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U helpdesk" --health-interval 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-retries 10
+      rabbitmq:
+        image: rabbitmq:4-alpine
+        env:
+          RABBITMQ_DEFAULT_USER: helpdesk
+          RABBITMQ_DEFAULT_PASS: helpdesk
+        ports: ["5672:5672"]
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping" --health-interval 10s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://helpdesk:helpdesk@localhost:5433/helpdesk
+      REDIS_URL: redis://localhost:6379
+      RABBITMQ_URL: amqp://helpdesk:helpdesk@localhost:5672
+      JWT_SECRET: ci-only-secret
+      WEB_ORIGIN: http://localhost:5173
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/api/package-lock.json
+      - run: npm ci
+      - run: npx prisma migrate deploy
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm test
+      - run: npm run test:e2e
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  docker:
+    # Proves the production images still build.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t helpdesk-api apps/api
+      - run: docker build -t helpdesk-web apps/web

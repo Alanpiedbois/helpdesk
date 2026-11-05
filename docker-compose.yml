@@ -1,5 +1,6 @@
-# Local infrastructure for development.
-# The API and the web app run on the host (npm run dev); only the services they depend on run here.
+# Development: `docker compose up -d` starts the infrastructure only; the API, worker and
+# web app run on the host with hot reload (npm run dev:*).
+# Full stack in containers: `docker compose --profile app up --build`, then http://localhost:8080
 services:
   postgres:
     image: postgres:17-alpine
@@ -44,6 +45,46 @@ services:
     ports:
       - "1025:1025" # SMTP
       - "8025:8025" # Web UI
+
+  # ---- Application (profile "app") -------------------------------------------------
+  # Inside the Compose network, services reach each other by name (postgres, redis...).
+  api:
+    profiles: [app]
+    build: ./apps/api
+    environment: &app-env
+      DATABASE_URL: postgresql://helpdesk:helpdesk@postgres:5432/helpdesk
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://helpdesk:helpdesk@rabbitmq:5672
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      WEB_ORIGIN: http://localhost:8080
+      JWT_SECRET: ${JWT_SECRET:-local-demo-secret-change-me}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      SLA_FIRST_RESPONSE_MINUTES: "60"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 10s
+      retries: 12
+
+  worker:
+    profiles: [app]
+    build: ./apps/api # same image as the API, different entry point
+    command: ["node", "dist/worker.js"]
+    environment: *app-env
+    depends_on:
+      api: { condition: service_healthy } # the API applies migrations first
+
+  web:
+    profiles: [app]
+    build: ./apps/web
+    ports:
+      - "8080:80"
+    depends_on:
+      api: { condition: service_healthy }
 
 volumes:
   postgres-data:

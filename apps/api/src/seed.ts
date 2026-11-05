@@ -1,5 +1,5 @@
 /**
- * Demo data: `npx prisma db seed`.
+ * Demo data: `npx prisma db seed` (dev) or `node dist/seed.js` (Docker image).
  * Safe to run several times: users are upserted, tickets are only created on an empty table.
  * All demo accounts use the password "demo-password".
  */
@@ -25,6 +25,9 @@ type Email = (typeof users)[number]['email'];
 
 interface SeedTicket {
   subject: string;
+  daysAgo: number;
+  /** Minutes until the first public staff reply (drives the dashboard average). */
+  firstResponseMinutes?: number;
   author: Email;
   assignee?: Email;
   status: TicketStatus;
@@ -35,6 +38,7 @@ interface SeedTicket {
 const tickets: SeedTicket[] = [
   {
     subject: "Impossible d'exporter mes factures en PDF",
+    daysAgo: 0,
     author: 'client.nina@demo.helpdesk',
     status: TicketStatus.OPEN,
     priority: TicketPriority.HIGH,
@@ -47,6 +51,7 @@ const tickets: SeedTicket[] = [
   },
   {
     subject: 'Double prélèvement sur mon abonnement',
+    daysAgo: 1,
     author: 'client.omar@demo.helpdesk',
     assignee: 'agent.lea@demo.helpdesk',
     status: TicketStatus.IN_PROGRESS,
@@ -65,6 +70,8 @@ const tickets: SeedTicket[] = [
   },
   {
     subject: 'Ajouter un collaborateur à mon compte',
+    daysAgo: 2,
+    firstResponseMinutes: 35,
     author: 'client.nina@demo.helpdesk',
     assignee: 'agent.hugo@demo.helpdesk',
     status: TicketStatus.WAITING_CUSTOMER,
@@ -79,6 +86,8 @@ const tickets: SeedTicket[] = [
   },
   {
     subject: "L'application est lente le matin",
+    daysAgo: 4,
+    firstResponseMinutes: 80,
     author: 'client.omar@demo.helpdesk',
     assignee: 'agent.hugo@demo.helpdesk',
     status: TicketStatus.RESOLVED,
@@ -89,6 +98,39 @@ const tickets: SeedTicket[] = [
     ],
   },
 ];
+
+// Older, closed conversations so the dashboard has two weeks of history.
+const history: [string, number, number][] = [
+  ['Changer l’adresse de facturation', 5, 25],
+  ['Erreur 500 à la connexion', 6, 12],
+  ['Comment exporter mes contacts ?', 7, 50],
+  ['Le lien de réinitialisation a expiré', 8, 20],
+  ['Demande de facture rectificative', 9, 95],
+  ['Synchronisation agenda en échec', 10, 40],
+  ['Suggestion : mode sombre', 11, 180],
+  ['Notifications e-mail en double', 12, 30],
+  ['Import CSV refusé', 12, 65],
+  ['Suppression de compte', 13, 45],
+];
+for (const [subject, daysAgo, minutes] of history) {
+  const client = daysAgo % 2 ? 'client.omar@demo.helpdesk' : 'client.nina@demo.helpdesk';
+  const agent = daysAgo % 3 ? 'agent.lea@demo.helpdesk' : 'agent.hugo@demo.helpdesk';
+  tickets.push({
+    subject,
+    daysAgo,
+    firstResponseMinutes: minutes,
+    author: client,
+    assignee: agent,
+    status: TicketStatus.CLOSED,
+    priority: TicketPriority.MEDIUM,
+    messages: [
+      { from: client, body: 'Bonjour, pouvez-vous m’aider ?' },
+      { from: agent, body: 'Bonjour, c’est réglé de notre côté. Bonne journée !' },
+    ],
+  });
+}
+
+const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000);
 
 async function main() {
   const passwordHash = await argon2.hash('demo-password');
@@ -109,15 +151,24 @@ async function main() {
   }
 
   for (const t of tickets) {
+    // Spread over the day so the timeline looks natural; messages follow the ticket.
+    const createdMinutesAgo = t.daysAgo * 1440 + 120;
+    const createdAt = minutesAgo(createdMinutesAgo);
     await prisma.ticket.create({
       data: {
         subject: t.subject,
+        createdAt,
+        firstResponseAt:
+          t.firstResponseMinutes === undefined
+            ? null
+            : minutesAgo(createdMinutesAgo - t.firstResponseMinutes),
         status: t.status,
         priority: t.priority,
         authorId: ids[t.author],
         assigneeId: t.assignee ? ids[t.assignee] : null,
         messages: {
-          create: t.messages.map((m) => ({
+          create: t.messages.map((m, i) => ({
+            createdAt: minutesAgo(createdMinutesAgo - (t.firstResponseMinutes ?? 30) * i),
             authorId: ids[m.from],
             body: m.body,
             internal: m.internal ?? false,
