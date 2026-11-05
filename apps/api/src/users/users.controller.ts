@@ -32,6 +32,20 @@ export class UsersController {
     return users.map(toPublicUser);
   }
 
+  /**
+   * Agents and admins, for the "assign to" menu. Open to agents too: the handler-level
+   * @Roles overrides the class-level one (Reflector.getAllAndOverride checks the handler first).
+   */
+  @Roles(Role.AGENT, Role.ADMIN)
+  @Get('staff')
+  staff(): Promise<{ id: string; name: string; role: Role }[]> {
+    return this.prisma.user.findMany({
+      where: { role: { in: [Role.AGENT, Role.ADMIN] } },
+      select: { id: true, name: true, role: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+
   /** Promote a client to agent, or an agent to admin. */
   @Patch(':id/role')
   async updateRole(
