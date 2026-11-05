@@ -23,6 +23,8 @@ export interface TicketSummary {
   status: TicketStatus
   priority: TicketPriority
   category: string | null
+  firstResponseAt: string | null
+  slaBreachedAt: string | null
   createdAt: string
   updatedAt: string
   author: UserSummary
@@ -49,3 +51,21 @@ export interface Page<T> {
 }
 
 export const isStaff = (user: Pick<User, 'role'>) => user.role !== 'CLIENT'
+
+export interface DashboardStats {
+  byStatus: Record<TicketStatus, number>
+  openByPriority: Record<TicketPriority, number>
+  unassignedOpen: number
+  slaBreachedOpen: number
+  avgFirstResponseMinutes: number | null
+  createdPerDay: { day: string; count: number }[]
+  generatedAt: string
+  cached: boolean
+}
+
+/** Sent by the API over the WebSocket: which ticket changed, how, and by whom. */
+export interface RealtimeMessage {
+  type: 'ticket.created' | 'message.created' | 'ticket.updated' | 'ticket.sla_breached' | 'ticket.triaged'
+  ticketId: string
+  actorId: string | null
+}

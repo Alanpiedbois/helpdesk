@@ -84,6 +84,11 @@ export function TicketsPage() {
               <li key={ticket.id}>
                 <Link to={`/tickets/${ticket.id}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 hover:bg-slate-50">
                   <span className="min-w-0 flex-1 truncate font-medium">{ticket.subject}</span>
+                  {ticket.slaBreachedAt && !['RESOLVED', 'CLOSED'].includes(ticket.status) && (
+                    <span className="rounded bg-red-50 px-1.5 py-0.5 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-200">
+                      ⏱ SLA dépassé
+                    </span>
+                  )}
                   <PriorityLabel priority={ticket.priority} />
                   <StatusBadge status={ticket.status} />
                   <span className="w-full text-xs text-slate-500 sm:w-auto">

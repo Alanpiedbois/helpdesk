@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router'
 import './index.css'
 import { Layout } from './components/Layout'
+import { DashboardPage } from './pages/DashboardPage'
 import { LoginPage } from './pages/LoginPage'
 import { NewTicketPage } from './pages/NewTicketPage'
 import { RegisterPage } from './pages/RegisterPage'
@@ -28,6 +29,7 @@ const router = createBrowserRouter([
       { path: '/tickets', element: <TicketsPage /> },
       { path: '/tickets/new', element: <NewTicketPage /> },
       { path: '/tickets/:id', element: <TicketPage /> },
+      { path: '/dashboard', element: <DashboardPage /> },
     ],
   },
   { path: '*', element: <Navigate to="/tickets" replace /> },

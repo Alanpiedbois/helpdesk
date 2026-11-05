@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from './client'
-import type { Page, Ticket, TicketPriority, TicketStatus, TicketSummary, User } from './types'
+import type { DashboardStats, Page, Ticket, TicketPriority, TicketStatus, TicketSummary, User } from './types'
 
 // TanStack Query owns all server data: caching, loading/error states, refetching.
 // Query keys are the cache addresses; mutations invalidate the keys they make stale.
@@ -10,6 +10,7 @@ export const keys = {
   ticketList: (filters: TicketFilters) => ['tickets', 'list', filters] as const,
   ticket: (id: string) => ['tickets', 'detail', id] as const,
   staff: ['staff'] as const,
+  stats: ['stats'] as const,
 }
 
 /** Current user, or null when logged out (401 is an answer here, not an error). */
@@ -115,4 +116,8 @@ export function useUpdateTicket(ticketId: string) {
     (body: { status?: TicketStatus; priority?: TicketPriority; assigneeId?: string | null }) =>
       api<Ticket>(`/tickets/${ticketId}`, { method: 'PATCH', body }),
   )
+}
+
+export function useStats() {
+  return useQuery({ queryKey: keys.stats, queryFn: () => api<DashboardStats>('/stats') })
 }

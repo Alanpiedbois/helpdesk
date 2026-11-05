@@ -12,6 +12,8 @@ export default defineConfig({
         target: 'http://localhost:3000',
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
+      // Socket.IO (WebSocket upgrade included) goes to the same API server.
+      '/socket.io': { target: 'http://localhost:3000', ws: true },
     },
   },
 })
