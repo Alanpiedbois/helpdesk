@@ -1,0 +1,9 @@
+// Database schema. Models are added step by step (users and roles come next).
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
