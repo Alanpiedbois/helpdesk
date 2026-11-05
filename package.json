@@ -6,6 +6,7 @@
     "infra:down": "docker compose down",
     "dev:api": "npm --prefix apps/api run start:dev",
     "dev:web": "npm --prefix apps/web run dev",
-    "test": "npm --prefix apps/api test"
+    "test": "npm --prefix apps/api test",
+    "dev:worker": "npm --prefix apps/api run dev:worker"
   }
 }

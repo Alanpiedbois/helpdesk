@@ -59,6 +59,9 @@ model Ticket {
   assigneeId String?
   assignee   User?          @relation("TicketAssignee", fields: [assigneeId], references: [id])
   messages   Message[]
+  // SLA: the first public staff reply must come within SLA_FIRST_RESPONSE_MINUTES.
+  firstResponseAt DateTime?
+  slaBreachedAt   DateTime?
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
 
@@ -80,4 +83,15 @@ model Message {
   createdAt DateTime @default(now())
 
   @@index([ticketId, createdAt])
+}
+
+// Idempotency log for RabbitMQ consumers. RabbitMQ delivers "at least once":
+// after a crash or a retry the same event can arrive twice. A consumer records the
+// event id once its side effect (e.g. an e-mail) is done, and skips ids it has seen.
+model ProcessedEvent {
+  eventId     String
+  consumer    String
+  processedAt DateTime @default(now())
+
+  @@id([eventId, consumer])
 }

@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, Role, TicketStatus } from '@prisma/client';
 import type { AuthUser } from '../auth/decorators.js';
+import { EventPublisher } from '../events/event-publisher.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
   CreateMessageDto,
@@ -30,6 +31,8 @@ const ticketSummarySelect = {
   status: true,
   priority: true,
   category: true,
+  firstResponseAt: true,
+  slaBreachedAt: true,
   createdAt: true,
   updatedAt: true,
   author: userSummary,
@@ -45,7 +48,10 @@ export interface Page<T> {
 
 @Injectable()
 export class TicketsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly events: EventPublisher,
+  ) {}
 
   /** Creates the ticket and its first message in one statement (nested write = one transaction). */
   async create(user: AuthUser, dto: CreateTicketDto) {
@@ -57,6 +63,11 @@ export class TicketsService {
         messages: { create: { authorId: user.id, body: dto.body } },
       },
       select: { id: true },
+    });
+    // Published after the commit: consumers must never see a ticket that is not in the DB yet.
+    await this.events.emit('ticket.created', {
+      ticketId: ticket.id,
+      ticketAuthorId: user.id,
     });
     return this.findOne(user, ticket.id);
   }
@@ -123,7 +134,12 @@ export class TicketsService {
 
     const ticket = await this.prisma.ticket.findFirst({
       where: { id: ticketId, ...visibleTicketsWhere(user) },
-      select: { status: true, assigneeId: true },
+      select: {
+        status: true,
+        assigneeId: true,
+        authorId: true,
+        firstResponseAt: true,
+      },
     });
     if (!ticket) throw new NotFoundException('Ticket not found');
     if (ticket.status === TicketStatus.CLOSED) {
@@ -136,14 +152,31 @@ export class TicketsService {
       internal,
       ticket.assigneeId !== null,
     );
+    // The first public staff reply stops the SLA clock.
+    const firstResponseAt =
+      isStaff(user) && !internal && !ticket.firstResponseAt
+        ? new Date()
+        : undefined;
+
     // Message + status change succeed or fail together.
-    await this.prisma.$transaction([
+    const [message] = await this.prisma.$transaction([
       this.prisma.message.create({
         data: { ticketId, authorId: user.id, body: dto.body, internal },
+        select: { id: true },
       }),
       // Always touched, even if the status is unchanged, so updatedAt reflects the last activity.
-      this.prisma.ticket.update({ where: { id: ticketId }, data: { status } }),
+      this.prisma.ticket.update({
+        where: { id: ticketId },
+        data: { status, firstResponseAt },
+      }),
     ]);
+    await this.events.emit('message.created', {
+      ticketId,
+      ticketAuthorId: ticket.authorId,
+      messageId: message.id,
+      authorId: user.id,
+      internal,
+    });
     return this.findOne(user, ticketId);
   }
 
@@ -151,7 +184,7 @@ export class TicketsService {
   async update(user: AuthUser, id: string, dto: UpdateTicketDto) {
     const ticket = await this.prisma.ticket.findUnique({
       where: { id },
-      select: { status: true },
+      select: { status: true, authorId: true },
     });
     if (!ticket) throw new NotFoundException('Ticket not found');
     if (ticket.status === TicketStatus.CLOSED) {
@@ -175,13 +208,17 @@ export class TicketsService {
         ? TicketStatus.IN_PROGRESS
         : undefined);
 
-    await this.prisma.ticket.update({
-      where: { id },
-      data: {
-        status,
-        priority: dto.priority,
-        assigneeId: dto.assigneeId, // undefined = unchanged, null = unassign
-      },
+    const changes = {
+      status,
+      priority: dto.priority,
+      assigneeId: dto.assigneeId, // undefined = unchanged, null = unassign
+    };
+    await this.prisma.ticket.update({ where: { id }, data: changes });
+    await this.events.emit('ticket.updated', {
+      ticketId: id,
+      ticketAuthorId: ticket.authorId,
+      actorId: user.id,
+      changes,
     });
     return this.findOne(user, id);
   }

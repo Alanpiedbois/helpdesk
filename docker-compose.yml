@@ -38,5 +38,12 @@ services:
       interval: 10s
       retries: 10
 
+  mailpit:
+    # Fake SMTP server: catches every e-mail sent in development. Inbox: http://localhost:8025
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # Web UI
+
 volumes:
   postgres-data:
