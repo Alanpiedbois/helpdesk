@@ -1,4 +1,4 @@
-// Database schema. Models are added step by step (users and roles come next).
+// Database schema. Run `npx prisma migrate dev` after changing it.
 generator client {
   provider = "prisma-client-js"
 }
@@ -6,4 +6,21 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+// CLIENT opens tickets, AGENT answers them, ADMIN manages users and settings.
+enum Role {
+  CLIENT
+  AGENT
+  ADMIN
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         Role     @default(CLIENT)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }

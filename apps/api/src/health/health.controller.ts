@@ -4,6 +4,7 @@ import {
   HealthCheckService,
   PrismaHealthIndicator,
 } from '@nestjs/terminus';
+import { Public } from '../auth/decorators.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 /**
@@ -11,6 +12,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
  * Returns 200 when every dependency answers, 503 otherwise.
  * Redis and RabbitMQ checks are added when those modules arrive.
  */
+@Public() // probes from Docker or the host have no session
 @Controller('health')
 export class HealthController {
   constructor(
