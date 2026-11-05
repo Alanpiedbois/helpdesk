@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { AiModule } from './ai/ai.module.js';
+import { TriageConsumer } from './ai/triage.consumer.js';
 import { EventsModule } from './events/events.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
@@ -18,7 +20,8 @@ import { SlaScheduler } from './sla/sla.scheduler.js';
     PrismaModule,
     EventsModule,
     NotificationsModule,
+    AiModule,
   ],
-  providers: [SlaScheduler],
+  providers: [SlaScheduler, TriageConsumer],
 })
 export class WorkerModule {}

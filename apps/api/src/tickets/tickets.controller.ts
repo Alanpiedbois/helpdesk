@@ -53,6 +53,15 @@ export class TicketsController {
   }
 
   @Roles(Role.AGENT, Role.ADMIN)
+  @Post(':id/suggest-reply')
+  suggestReply(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.tickets.suggestReply(user, id);
+  }
+
+  @Roles(Role.AGENT, Role.ADMIN)
   @Patch(':id')
   update(
     @CurrentUser() user: AuthUser,

@@ -142,6 +142,25 @@ describe('Tickets (e2e)', () => {
     await alice.get('/tickets?status=NOPE').expect(400);
   });
 
+  it('keeps AI suggestions away from clients', async () => {
+    await prisma.ticket.update({
+      where: { id: ticketId },
+      data: { aiSummary: 'Internal summary', aiSuggestedPriority: 'HIGH', category: 'bug' },
+    });
+    const forClient = await alice.get(`/tickets/${ticketId}`).expect(200);
+    const forAgent = await agent.get(`/tickets/${ticketId}`).expect(200);
+    expect(forClient.body.aiSummary).toBeNull();
+    expect(forClient.body.aiSuggestedPriority).toBeNull();
+    expect(forAgent.body.aiSummary).toBe('Internal summary');
+  });
+
+  it('reply drafts are staff only, and 503 when no API key is configured', async () => {
+    await alice.post(`/tickets/${ticketId}/suggest-reply`).expect(403);
+    if (!process.env.ANTHROPIC_API_KEY) {
+      await agent.post(`/tickets/${ticketId}/suggest-reply`).expect(503);
+    }
+  });
+
   it('a closed ticket accepts no more replies or changes', async () => {
     await agent.patch(`/tickets/${ticketId}`).send({ status: 'CLOSED' }).expect(200);
     await alice.post(`/tickets/${ticketId}/messages`).send({ body: 'One more thing' }).expect(409);

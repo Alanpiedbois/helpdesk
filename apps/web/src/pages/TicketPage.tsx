@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { useMe, useReply, useStaff, useTicket, useUpdateTicket } from '../api/hooks'
+import { useConfig, useMe, useReply, useStaff, useSuggestReply, useTicket, useUpdateTicket } from '../api/hooks'
 import { isStaff, type Ticket, type TicketPriority, type TicketStatus } from '../api/types'
 import { PriorityLabel, StatusBadge } from '../components/badges'
-import { priorityLabels, statusLabels } from '../labels'
+import { categoryLabels, priorityLabels, statusLabels } from '../labels'
 import { Button, ErrorMessage, Textarea } from '../components/ui'
 
 const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })
@@ -63,6 +63,8 @@ export function TicketPage() {
 
 function ReplyForm({ ticketId, staff }: { ticketId: string; staff: boolean }) {
   const reply = useReply(ticketId)
+  const suggest = useSuggestReply(ticketId)
+  const aiEnabled = useConfig().data?.ai ?? false
   const [body, setBody] = useState('')
   const [internal, setInternal] = useState(false)
 
@@ -81,13 +83,23 @@ function ReplyForm({ ticketId, staff }: { ticketId: string; staff: boolean }) {
         value={body}
         onChange={(e) => setBody(e.target.value)}
       />
-      <ErrorMessage error={reply.error} />
+      <ErrorMessage error={reply.error ?? suggest.error} />
       <div className="flex items-center justify-between">
         {staff ? (
-          <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input type="checkbox" checked={internal} onChange={(e) => setInternal(e.target.checked)} />
-            Note interne
-          </label>
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" checked={internal} onChange={(e) => setInternal(e.target.checked)} />
+              Note interne
+            </label>
+            {aiEnabled && <button
+              type="button"
+              className="rounded-md border border-violet-200 bg-violet-50 px-2 py-1 text-sm text-violet-700 hover:bg-violet-100 disabled:opacity-50"
+              disabled={suggest.isPending}
+              onClick={() => suggest.mutate(undefined, { onSuccess: ({ draft }) => setBody(draft) })}
+            >
+              {suggest.isPending ? 'Rédaction…' : '✨ Suggérer une réponse'}
+            </button>}
+          </div>
         ) : (
           <span />
         )}
@@ -103,6 +115,7 @@ function StaffPanel({ ticket }: { ticket: Ticket }) {
   const update = useUpdateTicket(ticket.id)
   const { data: staffList } = useStaff(true)
   const closed = ticket.status === 'CLOSED'
+  const aiEnabled = useConfig().data?.ai ?? false
   const select = 'w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm disabled:bg-slate-100'
 
   return (
@@ -110,6 +123,7 @@ function StaffPanel({ ticket }: { ticket: Ticket }) {
       <div className="text-slate-600">
         Client : <span className="font-medium text-slate-900">{ticket.author.name}</span>
       </div>
+      {aiEnabled && <AiPanel ticket={ticket} onApplyPriority={(priority) => update.mutate({ priority })} disabled={closed} />}
       <label className="block space-y-1">
         <span className="font-medium">Assigné à</span>
         <select
@@ -158,5 +172,39 @@ function StaffPanel({ ticket }: { ticket: Ticket }) {
       </label>
       <ErrorMessage error={update.error} />
     </aside>
+  )
+}
+
+/** AI triage result: shown as a suggestion, applied only if the agent agrees. */
+function AiPanel({
+  ticket,
+  onApplyPriority,
+  disabled,
+}: {
+  ticket: Ticket
+  onApplyPriority: (priority: TicketPriority) => void
+  disabled: boolean
+}) {
+  if (!ticket.triagedAt) {
+    return <p className="rounded-lg bg-violet-50 p-3 text-xs text-violet-700">Analyse IA en attente…</p>
+  }
+  if (!ticket.aiSummary) return null // triage attempted but no result (AI declined or unavailable)
+
+  const suggested = ticket.aiSuggestedPriority
+  return (
+    <div className="space-y-2 rounded-lg bg-violet-50 p-3 text-xs text-violet-900">
+      <div className="font-semibold">✨ Analyse IA</div>
+      {ticket.category && <div>Catégorie : {categoryLabels[ticket.category] ?? ticket.category}</div>}
+      <p>{ticket.aiSummary}</p>
+      {suggested && suggested !== ticket.priority && (
+        <button
+          className="rounded border border-violet-300 bg-white px-2 py-1 hover:bg-violet-100 disabled:opacity-50"
+          disabled={disabled}
+          onClick={() => onApplyPriority(suggested)}
+        >
+          Passer en priorité « {priorityLabels[suggested]} »
+        </button>
+      )}
+    </div>
   )
 }

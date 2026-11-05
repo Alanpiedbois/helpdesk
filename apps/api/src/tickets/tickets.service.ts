@@ -4,10 +4,12 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { Prisma, Role, TicketStatus } from '@prisma/client';
 import type { AuthUser } from '../auth/decorators.js';
 import { EventPublisher } from '../events/event-publisher.service.js';
+import { LlmService } from '../ai/llm.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
   CreateMessageDto,
@@ -31,6 +33,9 @@ const ticketSummarySelect = {
   status: true,
   priority: true,
   category: true,
+  aiSummary: true,
+  aiSuggestedPriority: true,
+  triagedAt: true,
   firstResponseAt: true,
   slaBreachedAt: true,
   createdAt: true,
@@ -38,6 +43,16 @@ const ticketSummarySelect = {
   author: userSummary,
   assignee: userSummary,
 } satisfies Prisma.TicketSelect;
+
+/** AI triage output is an internal suggestion for agents: blanked out for clients. */
+function forViewer<T extends { aiSummary: string | null; aiSuggestedPriority: unknown }>(
+  user: AuthUser,
+  ticket: T,
+): T {
+  return isStaff(user)
+    ? ticket
+    : { ...ticket, aiSummary: null, aiSuggestedPriority: null };
+}
 
 export interface Page<T> {
   items: T[];
@@ -51,6 +66,7 @@ export class TicketsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly events: EventPublisher,
+    private readonly llm: LlmService,
   ) {}
 
   /** Creates the ticket and its first message in one statement (nested write = one transaction). */
@@ -93,7 +109,7 @@ export class TicketsService {
       this.prisma.ticket.count({ where }),
     ]);
     return {
-      items,
+      items: items.map((t) => forViewer(user, t)),
       total,
       page: query.page,
       pageSize: query.pageSize,
@@ -123,7 +139,7 @@ export class TicketsService {
       },
     });
     if (!ticket) throw new NotFoundException('Ticket not found');
-    return ticket;
+    return forViewer(user, ticket);
   }
 
   async addMessage(user: AuthUser, ticketId: string, dto: CreateMessageDto) {
@@ -178,6 +194,26 @@ export class TicketsService {
       internal,
     });
     return this.findOne(user, ticketId);
+  }
+
+  /**
+   * Staff only. Synchronous on purpose (unlike triage): the agent clicked a button and
+   * waits for the draft. Nothing is sent to the client: the agent edits, then posts.
+   */
+  async suggestReply(user: AuthUser, id: string): Promise<{ draft: string }> {
+    if (!this.llm.enabled) {
+      throw new ServiceUnavailableException('AI features are not configured');
+    }
+    const ticket = await this.findOne(user, id);
+    const draft = await this.llm.draftReply(
+      ticket.subject,
+      ticket.messages.map((m) => ({
+        from: m.author.role === Role.CLIENT ? 'client' : 'agent',
+        internal: m.internal,
+        body: m.body,
+      })),
+    );
+    return { draft };
   }
 
   /** Staff only (enforced by @Roles on the controller). */

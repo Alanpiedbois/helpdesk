@@ -14,3 +14,12 @@ export const priorityLabels: Record<TicketPriority, string> = {
   HIGH: 'Haute',
   URGENT: 'Urgente',
 }
+
+export const categoryLabels: Record<string, string> = {
+  billing: 'Facturation',
+  bug: 'Bug',
+  account: 'Compte',
+  feature_request: 'Suggestion',
+  how_to: 'Question',
+  other: 'Autre',
+}

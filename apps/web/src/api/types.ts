@@ -23,6 +23,9 @@ export interface TicketSummary {
   status: TicketStatus
   priority: TicketPriority
   category: string | null
+  aiSummary: string | null
+  aiSuggestedPriority: TicketPriority | null
+  triagedAt: string | null
   firstResponseAt: string | null
   slaBreachedAt: string | null
   createdAt: string

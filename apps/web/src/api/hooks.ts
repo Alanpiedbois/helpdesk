@@ -121,3 +121,19 @@ export function useUpdateTicket(ticketId: string) {
 export function useStats() {
   return useQuery({ queryKey: keys.stats, queryFn: () => api<DashboardStats>('/stats') })
 }
+
+/** Staff only: asks the API for an AI-drafted reply. Nothing is posted until the agent sends it. */
+export function useSuggestReply(ticketId: string) {
+  return useMutation({
+    mutationFn: () => api<{ draft: string }>(`/tickets/${ticketId}/suggest-reply`, { method: 'POST' }),
+  })
+}
+
+/** Server feature flags (e.g. whether an AI API key is configured). */
+export function useConfig() {
+  return useQuery({
+    queryKey: ['config'],
+    queryFn: () => api<{ ai: boolean }>('/config'),
+    staleTime: Infinity,
+  })
+}

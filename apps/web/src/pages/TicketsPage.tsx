@@ -2,7 +2,7 @@ import { Link, useSearchParams } from 'react-router'
 import { useMe, useTickets, type TicketFilters } from '../api/hooks'
 import { isStaff, type TicketStatus } from '../api/types'
 import { PriorityLabel, StatusBadge } from '../components/badges'
-import { statusLabels } from '../labels'
+import { categoryLabels, statusLabels } from '../labels'
 import { ErrorMessage } from '../components/ui'
 
 const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
@@ -87,6 +87,11 @@ export function TicketsPage() {
                   {ticket.slaBreachedAt && !['RESOLVED', 'CLOSED'].includes(ticket.status) && (
                     <span className="rounded bg-red-50 px-1.5 py-0.5 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-200">
                       ⏱ SLA dépassé
+                    </span>
+                  )}
+                  {staff && ticket.category && (
+                    <span className="rounded bg-violet-50 px-1.5 py-0.5 text-xs text-violet-700">
+                      {categoryLabels[ticket.category] ?? ticket.category}
                     </span>
                   )}
                   <PriorityLabel priority={ticket.priority} />

@@ -53,7 +53,11 @@ model Ticket {
   subject    String
   status     TicketStatus   @default(OPEN)
   priority   TicketPriority @default(MEDIUM)
-  category   String? // filled by the AI classifier in a later step
+  // Filled by the AI triage (worker) right after creation. Suggestions only: agents decide.
+  category            String?
+  aiSummary           String?
+  aiSuggestedPriority TicketPriority?
+  triagedAt           DateTime?
   authorId   String
   author     User           @relation("TicketAuthor", fields: [authorId], references: [id])
   assigneeId String?
